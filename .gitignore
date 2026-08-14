@@ -1,6 +1,7 @@
 # 本地环境（含 API Key），切勿提交
 .env
 .env.*
+!.env.example
 
 # Python
 __pycache__/

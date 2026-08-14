@@ -1,0 +1,14 @@
+# 本地环境（含 API Key），切勿提交
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Typst 编译产物 / 运行时生成文件
+output.pdf
+temp_render.typ
+resume_data.json

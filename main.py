@@ -115,17 +115,80 @@ def _extract_json_object(text: str) -> dict:
     return {}
 
 
+# 模板所需的完整字段（LLM 漏输出时用默认值兜底）
+_EMPTY_RESUME = {
+    "NAME": "", "LOCATION": "", "EMAIL": "", "PHONE": "", "GITHUB": "", "LINKEDIN": "", "SITE": "",
+    "EDU_SCHOOL": "", "EDU_LOCATION": "", "EDU_DATE": "", "EDU_DEGREE": "", "EDU_COURSES": "", "EDU_AWARDS": "",
+    "EXPERIENCES": [], "CAMPUS": [],
+    "SKILL_PRO": "", "SKILL_TOOL": "", "SKILL_LANG": "",
+}
+
+# LLM 偶尔会把平面字段按分组嵌套输出，兼容拍平
+_GROUP_KEYS = ("基础信息", "教育背景", "技能特长")
+
+_EXP_ALIASES = {"company": "company", "Company": "company", "公司": "company", "role": "role", "Role": "role", "职位": "role", "岗位": "role", "title": "role", "location": "location", "Location": "location", "地点": "location", "date": "date", "Date": "date", "dates": "date", "时间": "date", "content": "content", "Content": "content", "内容": "content", "description": "content"}
+_CAMPUS_ALIASES = {"org": "org", "Org": "org", "organization": "org", "组织": "org", "机构": "org", "name": "org", "role": "role", "职位": "role", "岗位": "role", "location": "location", "地点": "location", "date": "date", "时间": "date", "content": "content", "内容": "content"}
+
+
+def _normalize_entry(item: dict, aliases: dict, is_campus: bool) -> dict:
+    base = ({"org": "", "role": "", "location": "", "date": "", "content": ""} if is_campus
+            else {"company": "", "role": "", "location": "", "date": "", "content": ""})
+    if not isinstance(item, dict):
+        return base
+    for k, v in item.items():
+        canon = aliases.get(k)
+        if canon and canon in base and v is not None:
+            base[canon] = v
+    return base
+
+
+def _normalize_resume_data(raw) -> dict:
+    """把 LLM 提取结果归一化为模板所需结构（扁平顶层键 + 数组），漏字段补默认值。"""
+    out = dict(_EMPTY_RESUME)
+    if not isinstance(raw, dict):
+        return out
+    for key, value in raw.items():
+        if key in _GROUP_KEYS and isinstance(value, dict):
+            # 分组嵌套 → 拍平到顶层
+            for k2, v2 in value.items():
+                k2u = str(k2).upper()
+                if k2u in out:
+                    out[k2u] = v2
+        else:
+            ku = str(key).upper()
+            if ku in out:
+                out[ku] = value
+    # 归一化经历/校园数组
+    exps = out.get("EXPERIENCES")
+    out["EXPERIENCES"] = [_normalize_entry(e, _EXP_ALIASES, False) for e in exps] if isinstance(exps, list) else []
+    camps = out.get("CAMPUS")
+    out["CAMPUS"] = [_normalize_entry(e, _CAMPUS_ALIASES, True) for e in camps] if isinstance(camps, list) else []
+    return out
+
+
 @app.post("/api/extract")
 async def extract_resume(file: UploadFile = File(...)):
     pdf_reader = PyPDF2.PdfReader(file.file)
     raw_text = "".join([page.extract_text() for page in pdf_reader.pages if page.extract_text()])
     
-    # 恢复你最原始的硬编码 Prompt
-    prompt = f"请将以下简历解析为JSON格式。字段包括: NAME, LOCATION, EMAIL, PHONE, GITHUB, LINKEDIN, SITE, EDU_SCHOOL, EDU_LOCATION, EDU_DATE, EDU_DEGREE, EDU_COURSES, EDU_AWARDS, EXP_1_COMPANY, EXP_1_ROLE, EXP_1_LOCATION, EXP_1_DATE, EXP_1_CONTENT, EXP_2_COMPANY, EXP_2_ROLE, EXP_2_LOCATION, EXP_2_DATE, EXP_2_CONTENT, CAMPUS_ORG, CAMPUS_ROLE, CAMPUS_LOCATION, CAMPUS_DATE, CAMPUS_CONTENT, SKILL_PRO, SKILL_TOOL, SKILL_LANG。如果有多个经历，挑最重要的2个。经历描述用'-'分点。只输出JSON代码块。\n\n{raw_text}"
+    # 提取全部经历（数组），不删减，供后续 AI 对话中灵活增删改
+    prompt = (
+        "请将以下简历解析为JSON。输出必须是【扁平】的顶层键值对象（键名见下，不要用“基础信息/教育背景”等分组名，不要嵌套）：\n"
+        "NAME, LOCATION, EMAIL, PHONE, GITHUB, LINKEDIN, SITE\n"
+        "EDU_SCHOOL, EDU_LOCATION, EDU_DATE, EDU_DEGREE, EDU_COURSES, EDU_AWARDS\n"
+        "EXPERIENCES（数组：工作/实习/项目经历，每项含 company, role, location, date, content，content 用 '-' 分点）\n"
+        "CAMPUS（数组：校园/学生工作经历，每项含 org, role, location, date, content）\n"
+        "SKILL_PRO, SKILL_TOOL, SKILL_LANG\n"
+        "要求：1) EXPERIENCES 必须包含简历中【所有】工作/实习/项目经历，按时间倒序排列，不得删减；"
+        "2) CAMPUS 必须包含【所有】校园/学生工作/社团经历，不得删减；"
+        "3) 以上每个平面字段都必须以顶层键输出，找不到填空字符串；"
+        "4) 只输出JSON代码块。\n\n"
+        f"{raw_text}"
+    )
     
     res = await aclient.chat.completions.create(model=MODEL_NAME, messages=[{"role": "user", "content": prompt}], temperature=0.1)
     ans = res.choices[0].message.content
-    data = _extract_json_object(ans)
+    data = _normalize_resume_data(_extract_json_object(ans))
     return {"data": data}
 
 

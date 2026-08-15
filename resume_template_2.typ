@@ -32,6 +32,19 @@
   #v(0.4em)
 ]
 
+// 经历条目（idx>0 时加一点间距）
+#let exp-block(e, idx) = {
+  if e.at("company", default: "") != "" or e.at("role", default: "") != "" or e.at("content", default: "") != "" [
+    #if idx > 0 [#v(0.25em)]
+    #grid(columns: (1fr, auto), align: (left, right), [
+      #text(weight: "bold")[#e.at("role", default: "")]
+      #if e.at("company", default: "") != "" [#h(0.6em) #text(weight: "regular")[#e.at("company", default: "")]]
+      #if e.at("location", default: "") != "" [#h(0.8em) #text(fill: gray, size: fs * 0.9 * 1pt)[#e.at("location", default: "")]]
+    ], [#e.at("date", default: "")])
+    #bullet-list(e.at("content", default: ""))
+  ]
+}
+
 // 页眉：姓名居中，联系方式左右分列（空项自动隐藏）
 #grid(
   columns: (1fr, 1fr, 1fr),
@@ -83,55 +96,47 @@
   #if edu-awards != "" [- 荣誉奖项：#edu-awards]
 ]
 
-// 实习经历（必展示）
+// 实习经历（必展示，渲染全部经历）
 #heading[实习经历]
-#let exp1 = (
-  company: data.at("EXP_1_COMPANY", default: ""),
-  role: data.at("EXP_1_ROLE", default: ""),
-  location: data.at("EXP_1_LOCATION", default: ""),
-  date: data.at("EXP_1_DATE", default: ""),
-  content: data.at("EXP_1_CONTENT", default: ""),
-)
-#if exp1.company != "" or exp1.role != "" or exp1.content != "" [
-  #grid(columns: (1fr, auto), align: (left, right), [
-    #text(weight: "bold")[#exp1.role]
-    #if exp1.company != "" [#h(0.6em) #text(weight: "regular")[#exp1.company]]
-    #if exp1.location != "" [#h(0.8em) #text(fill: gray, size: fs * 0.9 * 1pt)[#exp1.location]]
-  ], [#exp1.date])
-  #bullet-list(exp1.content)
+#let experiences = {
+  let exps = data.at("EXPERIENCES", default: none)
+  if exps != none and exps.len() > 0 {
+    exps
+  } else {
+    (
+      (company: data.at("EXP_1_COMPANY", default: ""), role: data.at("EXP_1_ROLE", default: ""), location: data.at("EXP_1_LOCATION", default: ""), date: data.at("EXP_1_DATE", default: ""), content: data.at("EXP_1_CONTENT", default: "")),
+      (company: data.at("EXP_2_COMPANY", default: ""), role: data.at("EXP_2_ROLE", default: ""), location: data.at("EXP_2_LOCATION", default: ""), date: data.at("EXP_2_DATE", default: ""), content: data.at("EXP_2_CONTENT", default: "")),
+    )
+  }
+}
+#for (i, e) in experiences.enumerate() [
+  #exp-block(e, i)
 ]
 
-#let exp2 = (
-  company: data.at("EXP_2_COMPANY", default: ""),
-  role: data.at("EXP_2_ROLE", default: ""),
-  location: data.at("EXP_2_LOCATION", default: ""),
-  date: data.at("EXP_2_DATE", default: ""),
-  content: data.at("EXP_2_CONTENT", default: ""),
-)
-#if exp2.company != "" or exp2.role != "" or exp2.content != "" [
-  #v(0.25em)
-  #grid(columns: (1fr, auto), align: (left, right), [
-    #text(weight: "bold")[#exp2.role]
-    #if exp2.company != "" [#h(0.6em) #text(weight: "regular")[#exp2.company]]
-    #if exp2.location != "" [#h(0.8em) #text(fill: gray, size: fs * 0.9 * 1pt)[#exp2.location]]
-  ], [#exp2.date])
-  #bullet-list(exp2.content)
-]
-
-// 校园经历（有内容才显示）
-#let campus-org = data.at("CAMPUS_ORG", default: "")
-#let campus-content = data.at("CAMPUS_CONTENT", default: "")
-#if campus-org != "" or campus-content != "" [
+// 校园经历（有内容才显示，支持多条）
+#let campus = {
+  let cps = data.at("CAMPUS", default: none)
+  if cps != none and cps.len() > 0 {
+    cps
+  } else {
+    (
+      (org: data.at("CAMPUS_ORG", default: ""), role: data.at("CAMPUS_ROLE", default: ""), location: data.at("CAMPUS_LOCATION", default: ""), date: data.at("CAMPUS_DATE", default: ""), content: data.at("CAMPUS_CONTENT", default: "")),
+    )
+  }
+}
+#if campus.any(e => e.at("org", default: "") != "" or e.at("role", default: "") != "" or e.at("content", default: "") != "") [
   #heading[校园经历]
-  #let campus-role = data.at("CAMPUS_ROLE", default: "")
-  #let campus-date = data.at("CAMPUS_DATE", default: "")
-  #let campus-loc = data.at("CAMPUS_LOCATION", default: "")
-  #grid(columns: (1fr, auto), align: (left, right), [
-    #text(weight: "bold")[#campus-org]
-    #if campus-role != "" [#h(0.6em) #text(weight: "regular")[#campus-role]]
-    #if campus-loc != "" [#h(0.8em) #text(fill: gray, size: fs * 0.9 * 1pt)[#campus-loc]]
-  ], [#campus-date])
-  #bullet-list(campus-content)
+  #for (i, e) in campus.enumerate() [
+    #if e.at("org", default: "") != "" or e.at("role", default: "") != "" or e.at("content", default: "") != "" [
+      #if i > 0 [#v(0.25em)]
+      #grid(columns: (1fr, auto), align: (left, right), [
+        #text(weight: "bold")[#e.at("org", default: "")]
+        #if e.at("role", default: "") != "" [#h(0.6em) #text(weight: "regular")[#e.at("role", default: "")]]
+        #if e.at("location", default: "") != "" [#h(0.8em) #text(fill: gray, size: fs * 0.9 * 1pt)[#e.at("location", default: "")]]
+      ], [#e.at("date", default: "")])
+      #bullet-list(e.at("content", default: ""))
+    ]
+  ]
 ]
 
 // 技能特长（任一非空才显示）

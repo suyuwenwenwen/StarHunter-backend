@@ -74,38 +74,53 @@
 #if edu-awards != "" [- 荣誉奖项：#edu-awards]
 
 // ==========================================
-// 4. 实习经历（必展示）
+// 4. 实习经历（必展示，渲染全部经历）
 // ==========================================
+// 经历数据：优先数组（新格式），否则回退旧 EXP_1/EXP_2
+#let experiences = {
+  let exps = data.at("EXPERIENCES", default: none)
+  if exps != none and exps.len() > 0 {
+    exps
+  } else {
+    (
+      (company: data.at("EXP_1_COMPANY", default: ""), role: data.at("EXP_1_ROLE", default: ""), location: data.at("EXP_1_LOCATION", default: ""), date: data.at("EXP_1_DATE", default: ""), content: data.at("EXP_1_CONTENT", default: "")),
+      (company: data.at("EXP_2_COMPANY", default: ""), role: data.at("EXP_2_ROLE", default: ""), location: data.at("EXP_2_LOCATION", default: ""), date: data.at("EXP_2_DATE", default: ""), content: data.at("EXP_2_CONTENT", default: "")),
+    )
+  }
+}
+
 == 实习经历
-#work-block(
-  data.at("EXP_1_COMPANY", default: ""),
-  data.at("EXP_1_ROLE", default: ""),
-  data.at("EXP_1_LOCATION", default: ""),
-  data.at("EXP_1_DATE", default: ""),
-  data.at("EXP_1_CONTENT", default: ""),
-)
-#work-block(
-  data.at("EXP_2_COMPANY", default: ""),
-  data.at("EXP_2_ROLE", default: ""),
-  data.at("EXP_2_LOCATION", default: ""),
-  data.at("EXP_2_DATE", default: ""),
-  data.at("EXP_2_CONTENT", default: ""),
-)
+#for e in experiences [
+  #work-block(
+    e.at("company", default: ""),
+    e.at("role", default: ""),
+    e.at("location", default: ""),
+    e.at("date", default: ""),
+    e.at("content", default: ""),
+  )
+]
 
 // ==========================================
-// 5. 校园经历（有内容才显示）
+// 5. 校园经历（有内容才显示，支持多条）
 // ==========================================
-#let campus-org = data.at("CAMPUS_ORG", default: "")
-#let campus-content = data.at("CAMPUS_CONTENT", default: "")
-#if campus-org != "" or campus-content != "" [
+#let campus = {
+  let cps = data.at("CAMPUS", default: none)
+  if cps != none and cps.len() > 0 {
+    cps
+  } else {
+    (
+      (org: data.at("CAMPUS_ORG", default: ""), role: data.at("CAMPUS_ROLE", default: ""), location: data.at("CAMPUS_LOCATION", default: ""), date: data.at("CAMPUS_DATE", default: ""), content: data.at("CAMPUS_CONTENT", default: "")),
+    )
+  }
+}
+#if campus.any(e => e.at("org", default: "") != "" or e.at("role", default: "") != "" or e.at("content", default: "") != "") [
   == 校园经历
-  #work(
-    company: campus-org,
-    title: data.at("CAMPUS_ROLE", default: ""),
-    location: data.at("CAMPUS_LOCATION", default: ""),
-    dates: data.at("CAMPUS_DATE", default: ""),
-  )
-  #bullet-list(campus-content)
+  #for e in campus [
+    #if e.at("org", default: "") != "" or e.at("role", default: "") != "" or e.at("content", default: "") != "" [
+      #work(company: e.at("org", default: ""), title: e.at("role", default: ""), location: e.at("location", default: ""), dates: e.at("date", default: ""))
+      #bullet-list(e.at("content", default: ""))
+    ]
+  ]
 ]
 
 // ==========================================

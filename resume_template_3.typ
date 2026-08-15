@@ -8,7 +8,7 @@
 #let sidebar-fill = rgb("#EDE7F6")   // 清新淡紫
 #let sidebar-text = rgb("#4A3A66")   // 深紫，保证浅色底上可读
 #let sidebar-accent = rgb("#6A4FA3") // 侧栏标题紫
-#let accent = rgb("#3258b8")
+#let accent = rgb("#6A4FA3")   // 正文标题统一紫色系，与侧栏一致
 
 #set page(paper: "a4", margin: 0pt)
 #set text(size: fs * 1pt, font: ("Noto Sans CJK SC", "SimSun", "Times New Roman"))
@@ -110,35 +110,55 @@
     #let edu-awards = data.at("EDU_AWARDS", default: "")
     #if edu-awards != "" [- 荣誉奖项：#edu-awards]
 
-    // 实习经历（必展示）
+    // 实习经历（必展示，渲染全部经历）
     #main-heading[实习经历]
-    #entry(
-      data.at("EXP_1_ROLE", default: ""),
-      data.at("EXP_1_COMPANY", default: ""),
-      data.at("EXP_1_LOCATION", default: ""),
-      data.at("EXP_1_DATE", default: ""),
-      data.at("EXP_1_CONTENT", default: ""),
-    )
-    #entry(
-      data.at("EXP_2_ROLE", default: ""),
-      data.at("EXP_2_COMPANY", default: ""),
-      data.at("EXP_2_LOCATION", default: ""),
-      data.at("EXP_2_DATE", default: ""),
-      data.at("EXP_2_CONTENT", default: ""),
-    )
+    #let experiences = {
+      let exps = data.at("EXPERIENCES", default: none)
+      if exps != none and exps.len() > 0 {
+        exps
+      } else {
+        (
+          (company: data.at("EXP_1_COMPANY", default: ""), role: data.at("EXP_1_ROLE", default: ""), location: data.at("EXP_1_LOCATION", default: ""), date: data.at("EXP_1_DATE", default: ""), content: data.at("EXP_1_CONTENT", default: "")),
+          (company: data.at("EXP_2_COMPANY", default: ""), role: data.at("EXP_2_ROLE", default: ""), location: data.at("EXP_2_LOCATION", default: ""), date: data.at("EXP_2_DATE", default: ""), content: data.at("EXP_2_CONTENT", default: "")),
+        )
+      }
+    }
+    #for e in experiences [
+      #if e.at("company", default: "") != "" or e.at("role", default: "") != "" or e.at("content", default: "") != "" [
+        #entry(
+          e.at("role", default: ""),
+          e.at("company", default: ""),
+          e.at("location", default: ""),
+          e.at("date", default: ""),
+          e.at("content", default: ""),
+        )
+      ]
+    ]
 
-    // 校园经历（有内容才显示）
-    #let campus-org = data.at("CAMPUS_ORG", default: "")
-    #let campus-content = data.at("CAMPUS_CONTENT", default: "")
-    #if campus-org != "" or campus-content != "" [
+    // 校园经历（有内容才显示，支持多条）
+    #let campus = {
+      let cps = data.at("CAMPUS", default: none)
+      if cps != none and cps.len() > 0 {
+        cps
+      } else {
+        (
+          (org: data.at("CAMPUS_ORG", default: ""), role: data.at("CAMPUS_ROLE", default: ""), location: data.at("CAMPUS_LOCATION", default: ""), date: data.at("CAMPUS_DATE", default: ""), content: data.at("CAMPUS_CONTENT", default: "")),
+        )
+      }
+    }
+    #if campus.any(e => e.at("org", default: "") != "" or e.at("role", default: "") != "" or e.at("content", default: "") != "") [
       #main-heading[校园经历]
-      #entry(
-        campus-org,
-        data.at("CAMPUS_ROLE", default: ""),
-        data.at("CAMPUS_LOCATION", default: ""),
-        data.at("CAMPUS_DATE", default: ""),
-        campus-content,
-      )
+      #for e in campus [
+        #if e.at("org", default: "") != "" or e.at("role", default: "") != "" or e.at("content", default: "") != "" [
+          #entry(
+            e.at("org", default: ""),
+            e.at("role", default: ""),
+            e.at("location", default: ""),
+            e.at("date", default: ""),
+            e.at("content", default: ""),
+          )
+        ]
+      ]
     ]
   ],
 )

@@ -1,11 +1,13 @@
 // ==========================================
-// 模版3：左侧深色侧边栏 + 右侧正文（中文适配版）
+// 模版3：左侧淡紫侧边栏 + 右侧正文（中文适配版）
 // ==========================================
 #let data = json("resume_data.json")
 #let config = json("resume_config.json")
 #let fs = config.at("font_size", default: 10)
 #let ls = config.at("line_spacing", default: 1.0)
-#let sidebar-fill = rgb("#223a5e")
+#let sidebar-fill = rgb("#EDE7F6")   // 清新淡紫
+#let sidebar-text = rgb("#4A3A66")   // 深紫，保证浅色底上可读
+#let sidebar-accent = rgb("#6A4FA3") // 侧栏标题紫
 #let accent = rgb("#3258b8")
 
 #set page(paper: "a4", margin: 0pt)
@@ -27,9 +29,9 @@
 // 侧边栏小节标题
 #let side-heading(title) = [
   #v(0.8em)
-  #text(size: fs * 1.15 * 1pt, weight: "bold")[#title]
+  #text(size: fs * 1.15 * 1pt, weight: "bold", fill: sidebar-accent)[#title]
   #v(0.15em)
-  #line(length: 100%, stroke: 0.6pt)
+  #line(length: 100%, stroke: 0.6pt + rgb("#C3B1E1"))
   #v(0.5em)
 ]
 
@@ -58,7 +60,7 @@
   // ================= 左侧栏 =================
   block(width: 100%, height: 100%, fill: sidebar-fill)[
     #pad(x: 1.3em, y: 1.8em)[
-      #set text(fill: white)
+      #set text(fill: sidebar-text)
 
       // 姓名
       #text(size: fs * 1.8 * 1pt, weight: "bold")[#data.at("NAME", default: "")]

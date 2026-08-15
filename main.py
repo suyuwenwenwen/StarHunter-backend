@@ -60,6 +60,9 @@ class ChatRequest(BaseModel):
 
 class CompileRequest(BaseModel):
     resume_data: Dict[str, Any]
+    template: int = 1        # 模板编号：1/2/3
+    font_size: float = 10    # 字号（pt）
+    line_spacing: float = 1.0  # 行距（em 倍数）
 
 
 def _extract_json_object(text: str) -> dict:
@@ -153,26 +156,37 @@ async def chat_with_ai(req: ChatRequest):
 
 @app.post("/api/compile")
 async def compile_pdf(req: CompileRequest):
-    template_path = Path(__file__).with_name("resume_template.typ")
+    # 校验模板编号（1-3），非法值回退到 1
+    template_num = req.template if 1 <= int(req.template) <= 3 else 1
+    template_path = Path(__file__).with_name(f"resume_template_{template_num}.typ")
 
     # 使用临时目录隔离，避免并发请求共享 resume_data.json / output.pdf 时互相覆盖
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp = Path(tmp_dir)
         temp_typ_path = tmp / "temp_render.typ"
         temp_json_path = tmp / "resume_data.json"
+        temp_config_path = tmp / "resume_config.json"
         output_pdf_path = tmp / "output.pdf"
 
         # 1. 将大模型生成的动态结构化数据写入 JSON 文件（模板通过 json("resume_data.json") 读取）
         with temp_json_path.open("w", encoding="utf-8") as f:
             json.dump(req.resume_data, f, ensure_ascii=False, indent=2)
 
-        # 2. 拷贝 Typst 图纸，模板自身会去读取同目录下的 resume_data.json
+        # 2. 写入排版配置（模板通过 json("resume_config.json") 读取）
+        with temp_config_path.open("w", encoding="utf-8") as f:
+            json.dump({
+                "template": template_num,
+                "font_size": float(req.font_size),
+                "line_spacing": float(req.line_spacing),
+            }, f, ensure_ascii=False, indent=2)
+
+        # 3. 拷贝所选模板，模板自身会去读取同目录下的 resume_data.json / resume_config.json
         shutil.copy(template_path, temp_typ_path)
 
-        # 3. 呼叫 Typst 编译
+        # 4. 呼叫 Typst 编译
         subprocess.run(["typst", "compile", str(temp_typ_path), str(output_pdf_path)], check=True)
 
-        # 4. 返回 PDF
+        # 5. 返回 PDF
         with output_pdf_path.open("rb") as f:
             pdf_base64 = base64.b64encode(f.read()).decode('utf-8')
 

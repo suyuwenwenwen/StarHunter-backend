@@ -5,6 +5,8 @@
 #let config = json("resume_config.json")
 #let fs = config.at("font_size", default: 10)
 #let ls = config.at("line_spacing", default: 1.0)
+#let has-photo = config.at("has_photo", default: false)
+#let photo-file = config.at("photo_file", default: "photo.png")
 #let sidebar-fill = rgb("#EDE7F6")   // 清新淡紫
 #let sidebar-text = rgb("#4A3A66")   // 深紫，保证浅色底上可读
 #let sidebar-accent = rgb("#6A4FA3") // 侧栏标题紫
@@ -62,22 +64,35 @@
     #pad(x: 1.3em, y: 1.8em)[
       #set text(fill: sidebar-text)
 
+      // 证件照（可选）
+      #if has-photo [
+        #align(center)[
+          #box(stroke: 1pt + rgb("#C3B1E1"), inset: 2pt, image(photo-file, width: 2.4cm, height: 3.4cm, fit: "cover"))
+        ]
+        #v(0.8em)
+      ]
+
       // 姓名
       #text(size: fs * 1.8 * 1pt, weight: "bold")[#data.at("NAME", default: "")]
       #v(0.4em)
 
-      // 联系方式（空项自动隐藏）
-      #let contacts = (
-        data.at("PHONE", default: ""),
-        data.at("EMAIL", default: ""),
-        data.at("LOCATION", default: ""),
-        data.at("GITHUB", default: ""),
-        data.at("LINKEDIN", default: ""),
-        data.at("SITE", default: ""),
-      ).filter(it => it != "")
-      #for c in contacts [
-        #c
-        #if c != contacts.last() [#v(0.25em)]
+      // 个人信息与联系方式（空项自动隐藏）
+      #let labeled = (
+        ("性别", data.at("GENDER", default: "")),
+        ("出生", data.at("BIRTH_YEAR", default: "")),
+        ("政治面貌", data.at("POLITICAL", default: "")),
+        ("籍贯", data.at("ORIGIN", default: "")),
+        ("现居", data.at("LOCATION", default: "")),
+        ("毕业", data.at("GRAD_YEAR", default: "")),
+        ("电话", data.at("PHONE", default: "")),
+        ("邮箱", data.at("EMAIL", default: "")),
+        ("GitHub", data.at("GITHUB", default: "")),
+        ("LinkedIn", data.at("LINKEDIN", default: "")),
+        ("网站", data.at("SITE", default: "")),
+      ).filter(p => p.at(1) != "")
+      #for p in labeled [
+        #text(weight: "bold", size: fs * 0.9 * 1pt)[#p.at(0)]： #p.at(1)
+        #v(0.3em)
       ]
 
       // 技能特长

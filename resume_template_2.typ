@@ -6,6 +6,15 @@
 #let fs = config.at("font_size", default: 10)
 #let ls = config.at("line_spacing", default: 1.0)
 #let accent = rgb("#3258b8")
+#let has-photo = config.at("has_photo", default: false)
+#let photo-file = config.at("photo_file", default: "photo.png")
+
+// 补充个人信息（性别/籍贯/现居已在页眉两侧展示，这里放其余字段）
+#let info-items = (
+  ("出生", data.at("BIRTH_YEAR", default: "")),
+  ("政治面貌", data.at("POLITICAL", default: "")),
+  ("毕业", data.at("GRAD_YEAR", default: "")),
+).filter(p => p.at(1) != "")
 
 #set page(paper: "a4", margin: (x: 1.6cm, y: 1.6cm))
 #set text(size: fs * 1pt, font: ("Noto Sans CJK SC", "SimSun", "Times New Roman"))
@@ -45,33 +54,51 @@
   ]
 }
 
-// 页眉：姓名居中，联系方式左右分列（空项自动隐藏）
+// 页眉：姓名居中，联系方式左右分列（空项自动隐藏），右上角可选证件照
 #grid(
-  columns: (1fr, 1fr, 1fr),
-  align: (left, center, right),
-  column-gutter: 1em,
+  columns: (1fr, auto),
+  column-gutter: 1.2em,
+  align: (left + top, right + top),
   [
-    #let left-items = (
-      data.at("EMAIL", default: ""),
-      data.at("PHONE", default: ""),
-    ).filter(it => it != "")
-    #left-items.join(linebreak())
-  ],
-  [
-    #text(size: fs * 1.9 * 1pt, weight: "bold")[#data.at("NAME", default: "")]
-    #let site = data.at("SITE", default: "")
-    #if site != "" [
-      #linebreak()
-      #text(size: fs * 0.85 * 1pt, fill: gray)[#site]
+    #grid(
+      columns: (1fr, 1fr, 1fr),
+      align: (left, center, right),
+      column-gutter: 1em,
+      [
+        #let left-items = (
+          data.at("PHONE", default: ""),
+          data.at("EMAIL", default: ""),
+          data.at("GENDER", default: ""),
+        ).filter(it => it != "")
+        #left-items.join(linebreak())
+      ],
+      [
+        #text(size: fs * 1.9 * 1pt, weight: "bold")[#data.at("NAME", default: "")]
+        #let site = data.at("SITE", default: "")
+        #if site != "" [
+          #linebreak()
+          #text(size: fs * 0.85 * 1pt, fill: gray)[#site]
+        ]
+      ],
+      [
+        #let right-items = (
+          data.at("ORIGIN", default: ""),
+          data.at("LOCATION", default: ""),
+          data.at("GITHUB", default: ""),
+          data.at("LINKEDIN", default: ""),
+        ).filter(it => it != "")
+        #right-items.join(linebreak())
+      ],
+    )
+    #if info-items.len() > 0 [
+      #v(0.6em)
+      #align(center)[#info-items.map(p => p.at(0) + "：" + p.at(1)).join("    ")]
     ]
   ],
   [
-    #let right-items = (
-      data.at("GITHUB", default: ""),
-      data.at("LINKEDIN", default: ""),
-      data.at("LOCATION", default: ""),
-    ).filter(it => it != "")
-    #right-items.join(linebreak())
+    #if has-photo [
+      #box(stroke: 0.6pt + rgb("#cccccc"), inset: 2pt, image(photo-file, width: 2.4cm, height: 3.4cm, fit: "cover"))
+    ]
   ],
 )
 #v(0.9em)

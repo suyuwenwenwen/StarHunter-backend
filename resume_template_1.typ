@@ -7,6 +7,17 @@
 #let config = json("resume_config.json")
 #let fs = config.at("font_size", default: 10)
 #let ls = config.at("line_spacing", default: 1.0)
+#let has-photo = config.at("has_photo", default: false)
+#let photo-file = config.at("photo_file", default: "photo.png")
+
+// 个人信息（非空项才显示）
+#let info-items = (
+  ("性别", data.at("GENDER", default: "")),
+  ("出生", data.at("BIRTH_YEAR", default: "")),
+  ("政治面貌", data.at("POLITICAL", default: "")),
+  ("籍贯", data.at("ORIGIN", default: "")),
+  ("毕业", data.at("GRAD_YEAR", default: "")),
+).filter(p => p.at(1) != "")
 
 #let name = data.at("NAME", default: "")
 #let location = data.at("LOCATION", default: "")
@@ -33,6 +44,28 @@
 
 // 行距（基于字号 em 缩放）
 #set par(leading: ls * 1em)
+
+// ==========================================
+// 1.5 补充个人信息（左）+ 证件照（右，不遮挡正文）
+// ==========================================
+#if info-items.len() > 0 or has-photo [
+  #grid(
+    columns: (1fr, auto),
+    column-gutter: 0.8em,
+    align: (left + top, right + top),
+    [
+      #if info-items.len() > 0 [
+        #info-items.map(p => p.at(0) + "：" + p.at(1)).join("    ")
+      ]
+    ],
+    [
+      #if has-photo [
+        #box(stroke: 0.6pt + rgb("#cccccc"), inset: 2pt, image(photo-file, width: 2.4cm, height: 3.4cm, fit: "cover"))
+      ]
+    ],
+  )
+  #v(0.4em)
+]
 
 // ==========================================
 // 2. 工具函数：把 "- xxx" 文本行渲染成 Typst 列表

@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import PyPDF2
 from openai import OpenAI, AsyncOpenAI
 import subprocess
@@ -63,26 +63,77 @@ class CompileRequest(BaseModel):
     template: int = 1        # 模板编号：1/2/3
     font_size: float = 10    # 字号（pt）
     line_spacing: float = 1.0  # 行距（em 倍数）
+    photo_base64: Optional[str] = None  # 证件照（data URL 或裸 base64）
+
+
+def _repair_json_text(s: str) -> str:
+    """修复 LLM 输出 JSON 的常见小瑕疵：字符串内出现真实换行/制表符、尾随逗号。
+
+    典型场景：AI 把 "- 点1\\n- 点2" 写成了真实的换行，导致 json.loads 解析失败、
+    更新字段丢失、右侧 PDF 不同步。
+    """
+    out = []
+    in_str = False
+    escaped = False
+    for ch in s:
+        if in_str:
+            if escaped:
+                escaped = False
+                out.append(ch)
+            elif ch == "\\":
+                escaped = True
+                out.append(ch)
+            elif ch == '"':
+                out.append(ch)
+                in_str = False
+            elif ch == "\n":
+                out.append("\\n")
+            elif ch == "\r":
+                out.append("\\r")
+            elif ch == "\t":
+                out.append("\\t")
+            else:
+                out.append(ch)
+        else:
+            if ch == '"':
+                in_str = True
+            out.append(ch)
+    text = "".join(out)
+    # 去掉对象/数组结尾的尾随逗号
+    text = re.sub(r",(\s*[}\]])", r"\1", text)
+    return text
+
+
+def _try_parse_json(raw: str):
+    """尝试解析 JSON（先原样，失败后修复再试）。"""
+    if not raw or not raw.strip():
+        return None
+    for candidate in (raw, _repair_json_text(raw)):
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            continue
+    return None
 
 
 def _extract_json_object(text: str) -> dict:
     """从 LLM 回复中鲁棒地提取 JSON 对象。
 
     优先匹配 ```json 代码块（大小写不敏感）；失败时按括号配平兜底扫描文本，
-    避免因 LLM 输出格式稍有变化（如 ```JSON、无语言标签、块后有尾随文字）
-    导致更新数据解析失败、C 端简历无法同步。
+    并对常见的 JSON 瑕疵（字符串内真实换行、尾随逗号）做修复后重试，
+    避免因 LLM 输出格式稍有变化导致更新数据解析失败、C 端简历无法同步。
     """
-    m = re.search(r'```(?:json)?[ \t]*\n(.*?)```', text, re.DOTALL | re.IGNORECASE)
+    m = re.search(r'```(?:json)?[ \t]*\n?(.*?)```', text, re.DOTALL | re.IGNORECASE)
     if m:
-        try:
-            parsed = json.loads(m.group(1).strip())
-            if isinstance(parsed, dict):
-                return parsed
-        except Exception:
-            pass
+        parsed = _try_parse_json(m.group(1).strip())
+        if parsed is not None:
+            return parsed
 
-    # 兜底：从后往前找 '{'，括号配平后尝试 json.loads
-    for start in range(len(text) - 1, -1, -1):
+    # 兜底：从前往后扫描，优先匹配【最外层】的 JSON 对象
+    # （注意：不能从后往前找，否则会命中最后一个内层对象，丢掉外层结构）
+    for start in range(len(text)):
         if text[start] != "{":
             continue
         depth = 0
@@ -105,19 +156,17 @@ def _extract_json_object(text: str) -> dict:
             elif ch == "}":
                 depth -= 1
                 if depth == 0:
-                    try:
-                        parsed = json.loads(text[start:end + 1])
-                        if isinstance(parsed, dict):
-                            return parsed
-                    except Exception:
-                        pass
+                    parsed = _try_parse_json(text[start:end + 1])
+                    if parsed is not None:
+                        return parsed
                     break
     return {}
 
 
 # 模板所需的完整字段（LLM 漏输出时用默认值兜底）
 _EMPTY_RESUME = {
-    "NAME": "", "LOCATION": "", "EMAIL": "", "PHONE": "", "GITHUB": "", "LINKEDIN": "", "SITE": "",
+    "NAME": "", "GENDER": "", "BIRTH_YEAR": "", "POLITICAL": "", "ORIGIN": "", "GRAD_YEAR": "",
+    "LOCATION": "", "EMAIL": "", "PHONE": "", "GITHUB": "", "LINKEDIN": "", "SITE": "",
     "EDU_SCHOOL": "", "EDU_LOCATION": "", "EDU_DATE": "", "EDU_DEGREE": "", "EDU_COURSES": "", "EDU_AWARDS": "",
     "EXPERIENCES": [], "CAMPUS": [],
     "SKILL_PRO": "", "SKILL_TOOL": "", "SKILL_LANG": "",
@@ -174,7 +223,7 @@ async def extract_resume(file: UploadFile = File(...)):
     # 提取全部经历（数组），不删减，供后续 AI 对话中灵活增删改
     prompt = (
         "请将以下简历解析为JSON。输出必须是【扁平】的顶层键值对象（键名见下，不要用“基础信息/教育背景”等分组名，不要嵌套）：\n"
-        "NAME, LOCATION, EMAIL, PHONE, GITHUB, LINKEDIN, SITE\n"
+        "基础信息字段（均为字符串）：NAME(姓名), GENDER(性别), BIRTH_YEAR(出生年份), POLITICAL(政治面貌，如中共党员/共青团员/群众), ORIGIN(籍贯或生源地), LOCATION(现居地或住址), GRAD_YEAR(毕业年份), EMAIL, PHONE, GITHUB, LINKEDIN, SITE\n"
         "EDU_SCHOOL, EDU_LOCATION, EDU_DATE, EDU_DEGREE, EDU_COURSES, EDU_AWARDS\n"
         "EXPERIENCES（数组：工作/实习/项目经历，每项含 company, role, location, date, content，content 用 '-' 分点）\n"
         "CAMPUS（数组：校园/学生工作经历，每项含 org, role, location, date, content）\n"
@@ -201,6 +250,40 @@ async def diagnose_resume(req: ChatRequest):
     return {"reply": res.choices[0].message.content}
 
 
+# 标记：AI 回复中出现这些词，说明很可能已经给出了定稿（此时应该有 JSON 更新块）
+_FINAL_DRAFT_MARKERS = ("定稿", "已完成", "最终版", "精修后", "润色后", "已完成优化")
+
+
+def _looks_like_final_draft(text: str) -> bool:
+    return any(m in text for m in _FINAL_DRAFT_MARKERS)
+
+
+async def _recover_update_fields(resume_data: dict, assistant_reply: str) -> dict:
+    """兜底补捞：LLM 偶尔漏输出 JSON 更新块，用一次轻量二次调用把定稿内容同步回来。"""
+    exps = resume_data.get("EXPERIENCES", []) if isinstance(resume_data, dict) else []
+    camps = resume_data.get("CAMPUS", []) if isinstance(resume_data, dict) else []
+    if not exps and not camps:
+        return {}
+    prompt = (
+        "你是数据同步助手。下面是一位简历精修导师刚给用户的回复。\n"
+        "如果这条回复中给出了某段经历【最终精修定稿】（而不是还在收集信息、或仅给出风格选项），"
+        "请把定稿内容同步为 JSON；如果只是收集信息/给选项，输出 {}。\n\n"
+        f"当前工作/实习经历（EXPERIENCES 完整数组，未修改的经历必须原样保留）：\n{json.dumps(exps, ensure_ascii=False)}\n\n"
+        f"当前校园经历（CAMPUS 完整数组）：\n{json.dumps(camps, ensure_ascii=False)}\n\n"
+        f"导师回复：\n{assistant_reply}\n\n"
+        "规则：只输出 JSON，不要任何解释；键名用 EXPERIENCES 或 CAMPUS，值为【完整数组】；"
+        "被精修的那段用定稿内容替换其 content，其余保持不变；"
+        '格式：{"EXPERIENCES": [{"company": "...", "role": "...", "location": "...", "date": "...", "content": "- 点1\\n- 点2"}]} 或 {}'
+    )
+    res = await aclient.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.0,
+        max_tokens=2400,
+    )
+    return _extract_json_object(res.choices[0].message.content or "")
+
+
 @app.post("/api/chat")
 async def chat_with_ai(req: ChatRequest):
     system_context = f"当前数据字典：{json.dumps(req.resume_data, ensure_ascii=False)}\n目标JD：{req.jd_input}"
@@ -210,11 +293,20 @@ async def chat_with_ai(req: ChatRequest):
     res = await aclient.chat.completions.create(model=MODEL_NAME, messages=api_msgs, temperature=0.5)
     full_ans = res.choices[0].message.content
 
-    # 提取 JSON 更新块（大小写不敏感、兼容各种代码块格式），并从回复中剔除
+    # 提取 JSON 更新块（大小写不敏感、兼容各种代码块格式、自动修复小瑕疵），并从回复中剔除
     updated_fields = _extract_json_object(full_ans)
-    clean_ans = re.sub(r'```(?:json)?[ \t]*\n.*?```', '', full_ans, flags=re.DOTALL | re.IGNORECASE).strip()
+    clean_ans = re.sub(r'```(?:json)?[ \t]*\n?.*?```', '', full_ans, flags=re.DOTALL | re.IGNORECASE).strip()
 
-    return {"reply": clean_ans, "updated_fields": updated_fields}
+    # 兜底：AI 漏输出 JSON 但回复里像是有定稿 -> 用轻量二次调用补捞，保证右侧 PDF 能同步
+    recovered = False
+    if not updated_fields and _looks_like_final_draft(full_ans):
+        try:
+            updated_fields = await _recover_update_fields(req.resume_data, full_ans)
+            recovered = bool(updated_fields)
+        except Exception:
+            updated_fields = {}
+
+    return {"reply": clean_ans, "updated_fields": updated_fields, "recovered": recovered}
 
 
 @app.post("/api/compile")
@@ -235,12 +327,32 @@ async def compile_pdf(req: CompileRequest):
         with temp_json_path.open("w", encoding="utf-8") as f:
             json.dump(req.resume_data, f, ensure_ascii=False, indent=2)
 
-        # 2. 写入排版配置（模板通过 json("resume_config.json") 读取）
+        # 2. 处理证件照（可选）：解码 base64 写入临时目录，模板按需嵌入
+        photo_file = None
+        raw_photo = (req.photo_base64 or "").strip()
+        if raw_photo:
+            try:
+                if raw_photo.startswith("data:") and "," in raw_photo:
+                    raw_photo = raw_photo.split(",", 1)[1]
+                img_bytes = base64.b64decode(raw_photo)
+                if img_bytes[:8] == b"\x89PNG\r\n\x1a\n":
+                    photo_file = "photo.png"
+                elif img_bytes[:2] == b"\xff\xd8":
+                    photo_file = "photo.jpg"
+                else:
+                    photo_file = "photo.png"
+                (tmp / photo_file).write_bytes(img_bytes)
+            except Exception:
+                photo_file = None
+
+        # 3. 写入排版配置（模板通过 json("resume_config.json") 读取）
         with temp_config_path.open("w", encoding="utf-8") as f:
             json.dump({
                 "template": template_num,
                 "font_size": float(req.font_size),
                 "line_spacing": float(req.line_spacing),
+                "has_photo": photo_file is not None,
+                "photo_file": photo_file or "photo.png",
             }, f, ensure_ascii=False, indent=2)
 
         # 3. 拷贝所选模板，模板自身会去读取同目录下的 resume_data.json / resume_config.json

@@ -167,7 +167,7 @@ def _extract_json_object(text: str) -> dict:
 _EMPTY_RESUME = {
     "NAME": "", "GENDER": "", "BIRTH_YEAR": "", "POLITICAL": "", "ORIGIN": "", "GRAD_YEAR": "",
     "LOCATION": "", "EMAIL": "", "PHONE": "", "GITHUB": "", "LINKEDIN": "", "SITE": "",
-    "EDU_SCHOOL": "", "EDU_LOCATION": "", "EDU_DATE": "", "EDU_DEGREE": "", "EDU_COURSES": "", "EDU_AWARDS": "",
+    "EDU_SCHOOL": "", "EDU_MAJOR": "", "EDU_LOCATION": "", "EDU_DATE": "", "EDU_DEGREE": "", "EDU_COURSES": "", "EDU_AWARDS": "",
     "EXPERIENCES": [], "CAMPUS": [],
     "SKILL_PRO": "", "SKILL_TOOL": "", "SKILL_LANG": "",
 }
@@ -224,7 +224,7 @@ async def extract_resume(file: UploadFile = File(...)):
     prompt = (
         "请将以下简历解析为JSON。输出必须是【扁平】的顶层键值对象（键名见下，不要用“基础信息/教育背景”等分组名，不要嵌套）：\n"
         "基础信息字段（均为字符串）：NAME(姓名), GENDER(性别), BIRTH_YEAR(出生年份), POLITICAL(政治面貌，如中共党员/共青团员/群众), ORIGIN(籍贯或生源地), LOCATION(现居地或住址), GRAD_YEAR(毕业年份), EMAIL, PHONE, GITHUB, LINKEDIN, SITE\n"
-        "EDU_SCHOOL, EDU_LOCATION, EDU_DATE, EDU_DEGREE, EDU_COURSES, EDU_AWARDS\n"
+        "EDU_SCHOOL（学校）, EDU_MAJOR（专业）, EDU_LOCATION, EDU_DATE（起止时间）, EDU_DEGREE（学历/学位，如本科/硕士）, EDU_COURSES（核心课程）, EDU_AWARDS（荣誉奖项）\n"
         "EXPERIENCES（数组：工作/实习/项目经历，每项含 company, role, location, date, content，content 用 '-' 分点）\n"
         "CAMPUS（数组：校园/学生工作经历，每项含 org, role, location, date, content）\n"
         "SKILL_PRO, SKILL_TOOL, SKILL_LANG\n"

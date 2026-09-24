@@ -64,12 +64,12 @@
     #pad(x: 1.3em, y: 1.8em)[
       #set text(fill: sidebar-text)
 
-      // 证件照（可选）
+      // 证件照（可选，无边框）
       #if has-photo [
         #align(center)[
-          #box(stroke: 1pt + rgb("#C3B1E1"), inset: 2pt, image(photo-file, width: 2.4cm, height: 3.4cm, fit: "cover"))
+          #image(photo-file, width: 3.0cm, height: 4.2cm, fit: "cover")
         ]
-        #v(0.8em)
+        #v(0.9em)
       ]
 
       // 姓名
@@ -112,11 +112,13 @@
     // 教育背景（必展示）
     #main-heading[教育背景]
     #let edu-school = data.at("EDU_SCHOOL", default: "")
+    #let edu-major = data.at("EDU_MAJOR", default: "")
     #let edu-degree = data.at("EDU_DEGREE", default: "")
     #let edu-location = data.at("EDU_LOCATION", default: "")
     #let edu-date = data.at("EDU_DATE", default: "")
     #grid(columns: (1fr, auto), align: (left, right), [
       #text(weight: "bold")[#edu-school]
+      #if edu-major != "" [#h(0.6em) #text(weight: "regular")[#edu-major]]
       #if edu-degree != "" [#h(0.6em) #text(style: "italic")[#edu-degree]]
       #if edu-location != "" [#h(0.8em) #text(fill: gray, size: fs * 0.9 * 1pt)[#edu-location]]
     ], [#text(fill: gray)[#edu-date]])

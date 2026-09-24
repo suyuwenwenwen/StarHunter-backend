@@ -81,13 +81,15 @@
         ]
       ],
       [
-        #let right-items = (
-          data.at("ORIGIN", default: ""),
-          data.at("LOCATION", default: ""),
+        #let addr = (
+          ("籍贯", data.at("ORIGIN", default: "")),
+          ("现居", data.at("LOCATION", default: "")),
+        ).filter(p => p.at(1) != "").map(p => p.at(0) + "：" + p.at(1))
+        #let links = (
           data.at("GITHUB", default: ""),
           data.at("LINKEDIN", default: ""),
         ).filter(it => it != "")
-        #right-items.join(linebreak())
+        #(addr + links).join(linebreak())
       ],
     )
     #if info-items.len() > 0 [
@@ -97,7 +99,7 @@
   ],
   [
     #if has-photo [
-      #box(stroke: 0.6pt + rgb("#cccccc"), inset: 2pt, image(photo-file, width: 2.4cm, height: 3.4cm, fit: "cover"))
+      #image(photo-file, width: 3.0cm, height: 4.2cm, fit: "cover")
     ]
   ],
 )
@@ -108,12 +110,14 @@
 // 教育背景（必展示）
 #heading[教育背景]
 #let edu-school = data.at("EDU_SCHOOL", default: "")
+#let edu-major = data.at("EDU_MAJOR", default: "")
 #let edu-location = data.at("EDU_LOCATION", default: "")
 #let edu-date = data.at("EDU_DATE", default: "")
 #let edu-degree = data.at("EDU_DEGREE", default: "")
 #if edu-school != "" or edu-degree != "" or edu-date != "" [
   #grid(columns: (1fr, auto), align: (left, right), [
     #text(weight: "bold")[#edu-school]
+    #if edu-major != "" [#h(0.6em) #text(weight: "regular")[#edu-major]]
     #if edu-degree != "" [#h(0.6em) #text(style: "italic")[#edu-degree]]
     #if edu-location != "" [#h(0.8em) #text(fill: gray, size: fs * 0.9 * 1pt)[#edu-location]]
   ], [#edu-date])

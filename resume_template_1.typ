@@ -13,10 +13,10 @@
 // 个人信息（非空项才显示）
 #let info-items = (
   ("性别", data.at("GENDER", default: "")),
-  ("出生", data.at("BIRTH_YEAR", default: "")),
+  ("出生年份", data.at("BIRTH_YEAR", default: "")),
   ("政治面貌", data.at("POLITICAL", default: "")),
   ("籍贯", data.at("ORIGIN", default: "")),
-  ("毕业", data.at("GRAD_YEAR", default: "")),
+  ("毕业年份", data.at("GRAD_YEAR", default: "")),
 ).filter(p => p.at(1) != "")
 
 #let name = data.at("NAME", default: "")

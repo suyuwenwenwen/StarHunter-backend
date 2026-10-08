@@ -63,6 +63,8 @@
   block(width: 100%, height: 100%, fill: sidebar-fill)[
     #pad(x: 1.3em, y: 1.8em)[
       #set text(fill: sidebar-text)
+      // 侧栏为短行信息，不两端对齐，避免换行时标签被撑开
+      #set par(justify: false)
 
       // 证件照（可选，无边框）
       #if has-photo [
@@ -79,11 +81,11 @@
       // 个人信息与联系方式（空项自动隐藏）
       #let labeled = (
         ("性别", data.at("GENDER", default: "")),
-        ("出生", data.at("BIRTH_YEAR", default: "")),
+        ("出生年份", data.at("BIRTH_YEAR", default: "")),
         ("政治面貌", data.at("POLITICAL", default: "")),
         ("籍贯", data.at("ORIGIN", default: "")),
         ("现居", data.at("LOCATION", default: "")),
-        ("毕业", data.at("GRAD_YEAR", default: "")),
+        ("毕业年份", data.at("GRAD_YEAR", default: "")),
         ("电话", data.at("PHONE", default: "")),
         ("邮箱", data.at("EMAIL", default: "")),
         ("GitHub", data.at("GITHUB", default: "")),
